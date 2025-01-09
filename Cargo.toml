@@ -1,0 +1,9 @@
+[workspace]
+
+members = [
+	"encryptor",
+    "utils",
+	"vigenere_cipher",
+	"adfgvx_cipher",
+]
+	workspace.resolver = "2"
