@@ -9,3 +9,4 @@ utils = {path = "../utils/"}
 adfgvx_cipher = {path = "../adfgvx_cipher/"}
 dialoguer = "0.11.0"
 inquire = "0.7.5"
+morse_code = {path = "../morse_code/"}

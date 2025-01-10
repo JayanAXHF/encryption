@@ -2,6 +2,7 @@
 use adfgvx_cipher::*;
 use dialoguer::Input;
 use inquire::error::InquireError;
+use morse_code::*;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -23,8 +24,12 @@ fn main() {
     );
     println!("-----------------------------------------------------------------------------------------------------------------");
     println!("-----------------------------------------------------------------------------------------------------------------");
-    let available_methods = HashMap::from([(0, vigenere as fn()), (1, adfgvx as fn())]);
-    let items = vec!["Vigenère Cipher", "ADFGVX Cipher"];
+    let available_methods = HashMap::from([
+        (0, vigenere as fn()),
+        (1, adfgvx as fn()),
+        (2, morse_code as fn()),
+    ]);
+    let items = vec!["Vigenère Cipher", "ADFGVX Cipher", "Morse Code"];
 
     let ans: Result<&str, InquireError> =
         inquire::Select::new("What ecryption method do you choose?", items.clone()).prompt();
@@ -362,4 +367,110 @@ fn polybius_to_string(square: Vec<Vec<char>>) -> String {
     }
 
     result.to_string()
+}
+
+fn morse_code() {
+    let items = vec!["Encryption Mode", "Decryption Mode"];
+
+    let mode = inquire::Select::new("Select Mode", items.clone())
+        .prompt()
+        .unwrap();
+
+    let mut plaintext = String::new();
+    if env::var("READ_FROM_FILE").is_ok() {
+        println!("\nEnter filename/path: ");
+        let mut filepath = String::new();
+        io::stdin()
+            .read_line(&mut filepath)
+            .expect("Error reading input");
+        plaintext = fs::read_to_string(filepath.trim())
+            .expect("error reading file")
+            .trim()
+            .to_string();
+    } else {
+        println!("\nEnter plaintext: ");
+        io::stdin()
+            .read_line(&mut plaintext)
+            .expect("Error reading input from user.");
+    }
+
+    if mode == "Encryption Mode" {
+        let encrypted_string = encrypt_morse_code(plaintext);
+
+        println!("-----------------------------------------------------------------------------------------------------------------");
+        println!("{}", encrypted_string);
+        println!("-----------------------------------------------------------------------------------------------------------------");
+        let items = vec!["Yes", "No"];
+
+        let ans = inquire::Select::new("Write the encrypted text to file?", items.clone())
+            .prompt()
+            .unwrap();
+
+        if ans == "Yes" {
+            let mut filename: String = String::new();
+            println!("Name the output file [press ENTER for default]");
+            io::stdin()
+                .read_line(&mut filename)
+                .expect("Error reading input");
+            filename = filename.trim().to_string();
+
+            if filename.is_empty() {
+                filename = "encrypted_text.txt".to_string();
+            } else {
+                filename.push_str(".txt");
+            }
+            /*match custom_filename {
+                Ok(file) => filename = file,
+                _ => filename = "encrypted_text.txt",
+            }*/
+            let temp = fs::write(filename, encrypted_string.trim());
+            match temp {
+                Ok(_) => {
+                    println!("File created successfully")
+                }
+                _ => {
+                    println!("Error while writing the output to file:")
+                }
+            }
+        }
+    } else {
+        let decrypted_string = decrypt_morse_code(plaintext);
+
+        println!("-----------------------------------------------------------------------------------------------------------------");
+        println!("{}", decrypted_string);
+        println!("-----------------------------------------------------------------------------------------------------------------");
+        let items = vec!["Yes", "No"];
+
+        let ans = inquire::Select::new("Write the decrypted text to file?", items.clone())
+            .prompt()
+            .unwrap();
+
+        if ans == "Yes" {
+            let mut filename: String = String::new();
+            println!("Name the output file [press ENTER for default]");
+            io::stdin()
+                .read_line(&mut filename)
+                .expect("Error reading input");
+            filename = filename.trim().to_string();
+
+            if filename.is_empty() {
+                filename = "decrypted_text.txt".to_string();
+            } else {
+                filename.push_str(".txt");
+            }
+            /*match custom_filename {
+                Ok(file) => filename = file,
+                _ => filename = "encrypted_text.txt",
+            }*/
+            let temp = fs::write(filename, decrypted_string.trim());
+            match temp {
+                Ok(_) => {
+                    println!("File created successfully")
+                }
+                _ => {
+                    println!("Error while writing the output to file:")
+                }
+            }
+        }
+    }
 }

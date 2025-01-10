@@ -4,6 +4,6 @@ members = [
 	"encryptor",
     "utils",
 	"vigenere_cipher",
-	"adfgvx_cipher",
+	"adfgvx_cipher", "morse_code",
 ]
 	workspace.resolver = "2"

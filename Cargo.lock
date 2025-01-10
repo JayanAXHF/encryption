@@ -217,6 +217,7 @@ dependencies = [
  "adfgvx_cipher",
  "dialoguer",
  "inquire",
+ "morse_code",
  "utils",
  "vigenere_cipher",
 ]
@@ -760,6 +761,10 @@ dependencies = [
  "wasi",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "morse_code"
+version = "0.1.0"
 
 [[package]]
 name = "native-tls"
