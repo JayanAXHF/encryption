@@ -1,4 +1,4 @@
-use serde_json::{json, map::Values, Value};
+use serde_json::{json, Value};
 use std::{env, io};
 use utils::*;
 pub fn generate_cipher(plaintext: String, keyword_string: String) -> String {
@@ -61,8 +61,6 @@ pub fn decrypt(mut encrypted_string: String, keyword: String) -> String {
     let mut decrypted_string = String::new();
     // Combine alphabet and numbers into a single character set
     remove_whitespace(&mut encrypted_string);
-    dbg!("{}", encrypted_string.len());
-    dbg!("{}", &encrypted_string);
     let keyword_string =
         generate_keyword_string(&mut keyword.trim().to_string(), encrypted_string.len());
     for (i, char) in encrypted_string.trim().chars().enumerate() {

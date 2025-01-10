@@ -21,11 +21,9 @@ pub fn generate_keyword_string(keyword: &mut String, plaintext_len: usize) -> St
         let remainder = plaintext_len % keyword.len();
         let quotient = plaintext_len / keyword.len();
         let mut keyword_string = keyword.repeat(quotient).to_string();
-        dbg!("{} -- {}", remainder, quotient);
         if remainder > 0 {
             keyword_string.push_str(&keyword[0..remainder]);
         }
-        dbg!("{}, {}", &keyword_string, &keyword_string.len());
         keyword_string
     } else {
         keyword[0..plaintext_len].to_string()
@@ -39,7 +37,7 @@ pub fn remove_repeating_letters(text: String) -> String {
         if x.is_whitespace() {
             return true;
         }
-        println!("{}", x);
+
         if letters.contains(&x) {
             false
         } else {
