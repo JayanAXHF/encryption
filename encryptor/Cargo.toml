@@ -1,0 +1,11 @@
+[package]
+name = "encryptor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vigenere_cipher = { path = "../vigenere_cipher" }
+utils = {path = "../utils/"}
+adfgvx_cipher = {path = "../adfgvx_cipher/"}
+dialoguer = "0.11.0"
+inquire = "0.7.5"
