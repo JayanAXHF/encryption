@@ -257,7 +257,7 @@ fn adfgvx() {
 
     let column_key: Vec<u8> = column_key
         .split_whitespace()
-        .map(|x| x.parse().unwrap())
+        .map(|x| {let y:u8 = x.parse().unwrap(); y})
         .collect();
     let square = polybius_square(key.clone());
     let square = polybius_to_string(square);
