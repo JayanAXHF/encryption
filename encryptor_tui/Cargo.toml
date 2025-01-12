@@ -11,3 +11,13 @@ ratatui = "0.29.0"
 color-eyre = "0.6.3"
 tui-textarea = "0.7.0"
 tui-input = "0.11.1"
+vigenere_cipher = {path="../vigenere_cipher/"}
+adfgvx_cipher = {path = "../adfgvx_cipher/"}
+morse_code = {path = "../morse_code/"}
+utils = {path="../utils/"}
+tracing-error = "0.2.1"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+directories = "5.0.1"
+lazy_static = "1.5.0"
+cli-log = "2.1.0"

@@ -1,3 +1,5 @@
+use cli_log::debug;
+use color_eyre::eyre::bail;
 use crossterm::cursor::{Hide, Show};
 use crossterm::event::{read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent};
 use crossterm::execute;
@@ -17,13 +19,16 @@ use ratatui::{
     Frame,
 };
 use std::io::{Result, Write};
+use tracing::field::debug;
 use tui_input::backend::crossterm as backend;
 use tui_input::backend::crossterm::EventHandler;
 use tui_textarea::TextArea;
 use tui_textarea::{Input, Key};
+use utils::generate_keyword_string;
+use vigenere_cipher::{decrypt, generate_cipher};
 const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
 
-use crate::app::{App, CurrentScreen, EncryptionMethods, SelectedMode};
+use crate::app::{App, CurrentScreen, EncryptionMethods, Modes, SelectedMode};
 
 pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
     let chunks = Layout::default()
@@ -122,7 +127,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
             };
             let footer_string = format!(
                 "Created by Jayan Sunil github:JayanAXHF\n
-            Press `Esc`, `Ctrl-C` or `q` to stop running. {} using {}
+            Press `Ctrl-C` or `q` to stop running or press `Ctrl-S` to continue. {} using {}
 ",
                 mode, method
             );
@@ -131,15 +136,197 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                 Style::default().fg(Color::Blue),
             ))
             .centered();
-            let mut textarea = app.keyword_text_area.clone();
-            textarea.set_block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Crossterm Minimal Example"),
-            );
+            match app.encryption {
+                EncryptionMethods::VigenereCipher => {
+                    let split_layout = Layout::new(
+                        Direction::Horizontal,
+                        vec![Constraint::Percentage(30), Constraint::Percentage(70)],
+                    )
+                    .split(chunks[1]);
+                    let mut textarea = app.keyword_text_area.clone();
+                    textarea.set_block(Block::default().borders(Borders::ALL).title("Keyword"));
+                    let mut text_mode = String::from("Enter the text to ");
+                    match app.mode.selected_mode {
+                        SelectedMode::Encrypt => {
+                            text_mode.push_str("encrypt");
+                        }
+                        SelectedMode::Decrypt => {
+                            text_mode.push_str("decrypt");
+                        }
+                    }
+                    let mut input_text_area = app.input_text_area.clone();
+                    input_text_area
+                        .set_block(Block::default().borders(Borders::ALL).title(text_mode));
+                    //textarea.input(app.keyword_input.clone());
+                    frame.render_widget(&textarea, split_layout[0]);
+                    frame.render_widget(&input_text_area, split_layout[1]);
+                }
+                EncryptionMethods::ADFGVX => {
+                    let split_layout = Layout::new(
+                        Direction::Horizontal,
+                        vec![Constraint::Percentage(30), Constraint::Percentage(70)],
+                    )
+                    .split(chunks[1]);
+                    let mut textarea = app.keyword_text_area.clone();
+                    let mut input_text_area = app.input_text_area.clone();
+                    let mut column_key_text_area = app.column_key_text_area.clone();
+                    textarea.set_block(Block::default().borders(Borders::ALL).title("Keyword"));
+                    let mut text_mode = String::from("Enter the text to ");
+                    match app.mode.selected_mode {
+                        SelectedMode::Encrypt => {
+                            text_mode.push_str("encrypt");
+                        }
+                        SelectedMode::Decrypt => {
+                            text_mode.push_str("decrypt");
+                        }
+                    }
+                    input_text_area
+                        .set_block(Block::default().borders(Borders::ALL).title(text_mode));
+                    column_key_text_area.set_block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Column Key [numbers 1-6 separated by whitespace]"),
+                    );
+                    let double_split = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                        .split(split_layout[0]);
 
-            textarea.input(app.keyword_input.clone());
-            frame.render_widget(&textarea, chunks[1]);
+                    frame.render_widget(&input_text_area, split_layout[1]);
+                    //textarea.input(app.keyword_input.clone());
+                    frame.render_widget(&textarea, double_split[0]);
+                    frame.render_widget(&column_key_text_area, double_split[1]);
+                }
+                EncryptionMethods::MorseCode => {
+                    let mut textarea = app.input_text_area.clone();
+                    let mut text_mode = String::from("Enter the text to ");
+                    match app.mode.selected_mode {
+                        SelectedMode::Encrypt => {
+                            text_mode.push_str("encrypt");
+                        }
+                        SelectedMode::Decrypt => {
+                            text_mode.push_str("decrypt");
+                        }
+                    }
+                    textarea.set_block(Block::default().borders(Borders::ALL).title(text_mode));
+                    frame.render_widget(&textarea, chunks[1]);
+                }
+            }
+            frame.render_widget(footer, chunks[2]);
+        }
+        CurrentScreen::SeeingResult => {
+            let method = match app.encryption {
+                EncryptionMethods::VigenereCipher => "Vigenere Cipher",
+                EncryptionMethods::ADFGVX => "ADFGVX Cipher",
+                EncryptionMethods::MorseCode => "Morse code",
+            };
+            let mode = match app.mode.selected_mode {
+                SelectedMode::Encrypt => "Encrypting",
+                SelectedMode::Decrypt => "Decrypting",
+            };
+            let footer_string = format!(
+                "Created by Jayan Sunil github:JayanAXHF. Showing Results\n
+            Press `Ctrl-C` or `q` to stop running or press `Ctrl-S` to continue. {} using {}
+",
+                mode, method
+            );
+            let footer = Paragraph::new(Text::styled(
+                footer_string,
+                Style::default().fg(Color::Blue),
+            ))
+            .centered();
+            match app.encryption {
+                EncryptionMethods::VigenereCipher => {
+                    debug!(
+                        "data: {:#?} ---- {:#?} --- {:#?}",
+                        app.keyword.clone(),
+                        app.plaintext.clone(),
+                        app.encrypted_string.clone()
+                    );
+                    let output_text = match app.mode.selected_mode {
+                        SelectedMode::Encrypt => generate_cipher(
+                            app.plaintext.clone(),
+                            generate_keyword_string(&mut app.keyword.clone(), app.plaintext.len()),
+                        ),
+                        SelectedMode::Decrypt => {
+                            decrypt(app.encrypted_string.clone(), app.keyword.clone())
+                        }
+                    };
+
+                    let split_layout = Layout::new(
+                        Direction::Horizontal,
+                        vec![Constraint::Percentage(30), Constraint::Percentage(70)],
+                    )
+                    .split(chunks[1]);
+                    let mut textarea = TextArea::new(vec![app.keyword.clone()]);
+                    textarea.set_block(Block::default().borders(Borders::ALL).title("Keyword"));
+                    let mut text_mode = String::new();
+                    match app.mode.selected_mode {
+                        SelectedMode::Encrypt => {
+                            text_mode.push_str("Encrypted Text");
+                        }
+                        SelectedMode::Decrypt => {
+                            text_mode.push_str("Decrypted Text");
+                        }
+                    }
+                    let mut input_text_area = TextArea::new(vec![output_text]);
+                    input_text_area
+                        .set_block(Block::default().borders(Borders::ALL).title(text_mode));
+                    //textarea.input(app.keyword_input.clone());
+                    frame.render_widget(&textarea, split_layout[0]);
+                    frame.render_widget(&input_text_area, split_layout[1]);
+                }
+                EncryptionMethods::ADFGVX => {
+                    let split_layout = Layout::new(
+                        Direction::Horizontal,
+                        vec![Constraint::Percentage(30), Constraint::Percentage(70)],
+                    )
+                    .split(chunks[1]);
+                    let mut textarea = app.keyword_text_area.clone();
+                    let mut input_text_area = app.input_text_area.clone();
+                    let mut column_key_text_area = app.column_key_text_area.clone();
+                    textarea.set_block(Block::default().borders(Borders::ALL).title("Keyword"));
+                    let mut text_mode = String::from("Enter the text to ");
+                    match app.mode.selected_mode {
+                        SelectedMode::Encrypt => {
+                            text_mode.push_str("encrypt");
+                        }
+                        SelectedMode::Decrypt => {
+                            text_mode.push_str("decrypt");
+                        }
+                    }
+                    input_text_area
+                        .set_block(Block::default().borders(Borders::ALL).title(text_mode));
+                    column_key_text_area.set_block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Column Key [numbers 1-6 separated by whitespace]"),
+                    );
+                    let double_split = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                        .split(split_layout[0]);
+
+                    frame.render_widget(&input_text_area, split_layout[1]);
+                    //textarea.input(app.keyword_input.clone());
+                    frame.render_widget(&textarea, double_split[0]);
+                    frame.render_widget(&column_key_text_area, double_split[1]);
+                }
+                EncryptionMethods::MorseCode => {
+                    let mut textarea = app.input_text_area.clone();
+                    let mut text_mode = String::from("Enter the text to ");
+                    match app.mode.selected_mode {
+                        SelectedMode::Encrypt => {
+                            text_mode.push_str("encrypt");
+                        }
+                        SelectedMode::Decrypt => {
+                            text_mode.push_str("decrypt");
+                        }
+                    }
+                    textarea.set_block(Block::default().borders(Borders::ALL).title(text_mode));
+                    frame.render_widget(&textarea, chunks[1]);
+                }
+            }
             frame.render_widget(footer, chunks[2]);
         }
         _ => {}

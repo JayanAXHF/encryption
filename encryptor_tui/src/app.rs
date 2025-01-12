@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, ListState, Paragraph},
     DefaultTerminal, Frame, Terminal,
 };
-use std::env;
+use std::{env, fs, iter::Cycle, slice::Iter};
 use tui_textarea::{CursorMove, Input, Key, TextArea};
 
 use crate::ui::ui;
@@ -56,6 +56,13 @@ pub struct Modes {
     pub selected_mode: SelectedMode,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Inputs {
+    Keyword,
+    InputText,
+    ColumnKey,
+}
+
 #[derive(Debug)]
 pub struct App<'a> {
     /// Is the application running?
@@ -70,8 +77,12 @@ pub struct App<'a> {
     pub encryption: EncryptionMethods,
     pub encryption_methods_list: ChosenMethodList,
     pub mode: Modes,
+    pub keyword_text_area: TextArea<'a>,
+    pub input_text_area: TextArea<'a>,
+    pub column_key_text_area: TextArea<'a>,
+    pub inputs: Vec<Inputs>,
     pub keyword_input: Input,
-    pub keyword_text_area: TextArea<'a>
+    pub currently_editing: Inputs,
 }
 
 impl Default for App<'_> {
@@ -114,13 +125,17 @@ impl Default for App<'_> {
                 state: ListState::default(),
                 selected_mode: SelectedMode::Encrypt,
             },
+            keyword_text_area: TextArea::default(),
+            inputs: vec![Inputs::InputText],
+            input_text_area: TextArea::default(),
+            column_key_text_area: TextArea::default(),
             keyword_input: Input {
                 key: Key::Char('a'),
                 ctrl: true,
                 alt: false,
                 shift: false,
             },
-            keyword_text_area: TextArea::default()
+            currently_editing: Inputs::Keyword,
         }
     }
 }
@@ -188,9 +203,20 @@ impl App<'_> {
             CurrentScreen::ChoosingEncryption => {
                 if self.encryption_methods_list.state.selected().is_some() {
                     self.encryption = match self.encryption_methods_list.state.selected() {
-                        Some(0) => EncryptionMethods::VigenereCipher,
-                        Some(1) => EncryptionMethods::ADFGVX,
-                        Some(2) => EncryptionMethods::MorseCode,
+                        Some(0) => {
+                            self.inputs = vec![Inputs::Keyword, Inputs::InputText];
+                            EncryptionMethods::VigenereCipher
+                        }
+                        Some(1) => {
+                            self.inputs =
+                                vec![Inputs::Keyword, Inputs::InputText, Inputs::ColumnKey];
+                            EncryptionMethods::ADFGVX
+                        }
+                        Some(2) => {
+                            self.inputs = vec![Inputs::InputText];
+                            self.currently_editing = Inputs::InputText;
+                            EncryptionMethods::MorseCode
+                        }
                         _ => EncryptionMethods::VigenereCipher,
                     };
                     self.current_screen = CurrentScreen::ChoosingMode
@@ -245,33 +271,186 @@ impl App<'_> {
     /// If your application needs to perform work in between handling events, you can use the
     /// [`event::poll`] function to check if there are any events available with a timeout.
     fn handle_crossterm_events(&mut self) -> Result<()> {
-        match event::read()? {
-            // it's important to check KeyEventKind::Press to avoid handling key release events
-            Event::Key(key) => {
-                if key.kind == KeyEventKind::Press {
-                    match self.current_screen {
-                        CurrentScreen::InputtingValues => {
-                            match key.code {
-                                KeyCode::Char(value) => {
-                                    self.keyword_text_area.insert_char(value);
-                                    self.keyword_text_area.move_cursor(CursorMove::Forward);
-                                },
-                                KeyCode::Backspace => {
-                                    self.keyword_text_area.delete_char();
-                                    self.keyword_text_area.move_cursor(CursorMove::Back);
-                                },
-                                KeyCode::Esc => {self.quit();}
-                                _ => {}
-                            }
+        match self.current_screen {
+            CurrentScreen::InputtingValues => match crossterm::event::read()?.into() {
+                Input { key: Key::Esc, .. } => self.quit(),
+                Input {
+                    key: Key::Char('s') | Key::Char('S'),
+                    ctrl: true,
+                    ..
+                } => {
+                    if let CurrentScreen::InputtingValues = self.current_screen {
+                        let keyword_text = self.keyword_text_area.clone().into_lines().join(" ");
+                        let column_key: Vec<u8> = self
+                            .column_key_text_area
+                            .clone()
+                            .into_lines()
+                            .join(" ")
+                            .split_whitespace()
+                            .enumerate()
+                            .map(|(i, x)| x.parse().unwrap_or(i as u8 + 1_u8))
+                            .collect();
+                        let mut input_text = self.input_text_area.clone().into_lines().join(" ");
+
+                        self.keyword = keyword_text;
+                        self.column_key = column_key;
+                        if self.read_from_file {
+                            input_text = fs::read_to_string(input_text).expect("Error reading file")
                         }
-                        _ => self.on_key_event(key),
+                        match self.mode.selected_mode {
+                            SelectedMode::Encrypt => {
+                                self.plaintext = input_text;
+                            }
+                            SelectedMode::Decrypt => self.encrypted_string = input_text,
+                        }
+                        self.current_screen = CurrentScreen::SeeingResult;
                     }
                 }
+                input => match input {
+                    Input { key: Key::Tab, .. } => {
+                        if let EncryptionMethods::MorseCode = self.encryption {
+                        } else {
+                            let index = self
+                                .inputs
+                                .clone()
+                                .into_iter()
+                                .position(|r| r == self.currently_editing)
+                                .expect("Error finding index");
+                            let next_element = if index < self.inputs.len() - 1 {
+                                self.inputs[index + 1].clone()
+                            } else {
+                                self.inputs[0].clone()
+                            };
+                            self.currently_editing = next_element;
+                        }
+                    }
+                    _ => match self.currently_editing {
+                        Inputs::Keyword => {
+                            self.keyword_text_area.input(input);
+                        }
+                        Inputs::InputText => {
+                            self.input_text_area.input(input);
+                        }
+                        Inputs::ColumnKey => {
+                            self.column_key_text_area.input(input);
+                        }
+                    },
+                },
+            },
+            _ => {
+                match event::read()? {
+                    // it's important to check KeyEventKind::Press to avoid handling key release events
+                    Event::Key(key) => {
+                        if key.kind == KeyEventKind::Press {
+                            match (key.modifiers, key.code) {
+                                (_, KeyCode::Esc)
+                                | (
+                                    KeyModifiers::CONTROL,
+                                    KeyCode::Char('c') | KeyCode::Char('C'),
+                                ) => self.quit(),
+                                (
+                                    KeyModifiers::CONTROL,
+                                    KeyCode::Char('s') | KeyCode::Char('S'),
+                                ) => {
+                                    if let CurrentScreen::InputtingValues = self.current_screen {
+                                        let keyword_text =
+                                            self.keyword_text_area.clone().into_lines().join(" ");
+                                        let column_key: Vec<u8> = self
+                                            .column_key_text_area
+                                            .clone()
+                                            .into_lines()
+                                            .join(" ")
+                                            .split_whitespace()
+                                            .enumerate()
+                                            .map(|(i, x)| x.parse().unwrap_or(i as u8 + 1_u8))
+                                            .collect();
+                                        let mut input_text =
+                                            self.input_text_area.clone().into_lines().join(" ");
+
+                                        self.keyword = keyword_text;
+                                        self.column_key = column_key;
+                                        if self.read_from_file {
+                                            input_text = fs::read_to_string(input_text)
+                                                .expect("Error reading file")
+                                        }
+                                        match self.mode.selected_mode {
+                                            SelectedMode::Encrypt => {
+                                                self.plaintext = input_text;
+                                            }
+                                            SelectedMode::Decrypt => {
+                                                self.encrypted_string = input_text
+                                            }
+                                        }
+                                        self.current_screen = CurrentScreen::SeeingResult;
+                                    }
+                                }
+                                // Add other key handlers here.
+                                _ => {}
+                            }
+                            match self.current_screen {
+                                CurrentScreen::InputtingValues => match key.code {
+                                    KeyCode::Char(value) => match self.currently_editing {
+                                        Inputs::Keyword => {
+                                            self.keyword_text_area.insert_char(value);
+                                            self.keyword_text_area.move_cursor(CursorMove::Forward);
+                                        }
+                                        Inputs::InputText => {
+                                            self.input_text_area.insert_char(value);
+                                            self.input_text_area.move_cursor(CursorMove::Forward);
+                                        }
+                                        Inputs::ColumnKey => {
+                                            self.column_key_text_area.insert_char(value);
+                                            self.column_key_text_area
+                                                .move_cursor(CursorMove::Forward);
+                                        }
+                                    },
+                                    KeyCode::Backspace => match self.currently_editing {
+                                        Inputs::Keyword => {
+                                            self.keyword_text_area.delete_char();
+                                            self.keyword_text_area.move_cursor(CursorMove::Back);
+                                        }
+                                        Inputs::InputText => {
+                                            self.input_text_area.delete_char();
+                                            self.input_text_area.move_cursor(CursorMove::Back);
+                                        }
+                                        Inputs::ColumnKey => {
+                                            self.column_key_text_area.delete_char();
+                                            self.column_key_text_area.move_cursor(CursorMove::Back);
+                                        }
+                                    },
+                                    KeyCode::Esc => {
+                                        self.quit();
+                                    }
+                                    KeyCode::Tab => {
+                                        if let EncryptionMethods::MorseCode = self.encryption {
+                                        } else {
+                                            let index = self
+                                                .inputs
+                                                .clone()
+                                                .into_iter()
+                                                .position(|r| r == self.currently_editing)
+                                                .expect("Error finding index");
+                                            let next_element = if index < self.inputs.len() - 1 {
+                                                self.inputs[index + 1].clone()
+                                            } else {
+                                                self.inputs[0].clone()
+                                            };
+                                            self.currently_editing = next_element;
+                                        }
+                                    }
+                                    _ => {}
+                                },
+                                _ => self.on_key_event(key),
+                            }
+                        }
+                    }
+                    Event::Mouse(_) => {}
+                    Event::Resize(_, _) => {}
+                    _ => {}
+                }
             }
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
-            _ => {}
         }
+
         Ok(())
     }
 

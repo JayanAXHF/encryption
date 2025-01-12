@@ -1,6 +1,7 @@
 use std::io;
 
 pub use app::App;
+use logging::initialize_logging;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     crossterm::{
@@ -12,9 +13,12 @@ use ratatui::{
 };
 pub mod app;
 pub mod ui;
+pub mod logging;
 
 fn main() -> color_eyre::Result<()> {
+    cli_log::init_cli_log!();
     color_eyre::install()?;
+    //initialize_logging()?;
     enable_raw_mode()?;
     let mut stderr = io::stderr(); // This is a special case. Normally using stdout is fine
     execute!(stderr, EnterAlternateScreen, EnableMouseCapture)?;
@@ -33,6 +37,6 @@ fn main() -> color_eyre::Result<()> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
-    // ratatui::restore();
+     ratatui::restore();
      Ok(())
 }
