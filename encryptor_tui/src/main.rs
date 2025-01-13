@@ -18,7 +18,7 @@ pub mod logging;
 fn main() -> color_eyre::Result<()> {
     cli_log::init_cli_log!();
     color_eyre::install()?;
-    //initialize_logging()?;
+    initialize_logging()?;
     enable_raw_mode()?;
     let mut stderr = io::stderr(); // This is a special case. Normally using stdout is fine
     execute!(stderr, EnterAlternateScreen, EnableMouseCapture)?;

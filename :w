@@ -7,7 +7,6 @@ use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
-use morse_code::{decrypt_morse_code, encrypt_morse_code};
 use ratatui::prelude::{CrosstermBackend, Stylize};
 use ratatui::Terminal;
 use ratatui::{
@@ -265,20 +264,19 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                         column_key_text_area_block.border_style(Color::Green);
                 }
             }
-            /*if app.read_from_file {
+            if app.read_from_file {
                 match app.mode.selected_mode {
                     SelectedMode::Encrypt => {
                         app.plaintext = fs::read_to_string(app.plaintext.trim())?;
                         debug!("{}", &app.plaintext)
                     }
                     SelectedMode::Decrypt => {
-                        app.encrypted_string = fs::read_to_string(app.encrypted_string.trim())?
+                        app.encrypted_string = fs::read_to_string(app.encrypted_string.clone())?
                     }
                 }
-            }*/
+            }
             app.plaintext = remove_punctuation(&remove_whitespace(&mut app.plaintext.clone()));
-            app.encrypted_string =
-                remove_punctuation(&remove_whitespace(&mut app.encrypted_string.clone()));
+            app.encrypted_string = remove_punctuation(&remove_whitespace(&mut app.encrypted_string));
             match app.encryption {
                 EncryptionMethods::VigenereCipher => {
                     debug!(
@@ -293,19 +291,11 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                             app.plaintext.clone(),
                             generate_keyword_string(&mut app.keyword.clone(), app.plaintext.len()),
                         ),
-                        SelectedMode::Decrypt => decrypt(
-                            app.encrypted_string.clone(),
-                            generate_keyword_string(&mut app.keyword.clone(), app.encrypted_string.len()),
-                        ),
-                    };
-                    match app.mode.selected_mode {
-                        SelectedMode::Encrypt => {
-                            app.encrypted_string = output_text.clone();
-                        }
                         SelectedMode::Decrypt => {
-                            app.plaintext = output_text.clone();
+                            decrypt(app.encrypted_string.clone(), app.keyword.clone())
                         }
-                    }
+                    };
+
                     let split_layout = Layout::new(
                         Direction::Horizontal,
                         vec![Constraint::Percentage(30), Constraint::Percentage(70)],
@@ -314,7 +304,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                     let mut textarea = TextArea::new(vec![app.keyword.clone()]);
                     textarea.set_block(keyword_text_area_block);
 
-                    let mut input_text_area = TextArea::new(vec![output_text.trim().to_owned()]);
+                    let mut input_text_area = TextArea::new(vec![output_text]);
                     input_text_area.set_block(input_text_area_block);
                     //textarea.input(app.keyword_input.clone());
                     frame.render_widget(&textarea, split_layout[0]);
@@ -369,23 +359,12 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                 EncryptionMethods::MorseCode => {
                     let mut textarea = app.input_text_area.clone();
                     let mut text_mode = String::from("Enter the text to ");
-                    let output_text = match app.mode.selected_mode {
+                    match app.mode.selected_mode {
                         SelectedMode::Encrypt => {
                             text_mode.push_str("encrypt");
-                            encrypt_morse_code(app.plaintext.clone())
                         }
                         SelectedMode::Decrypt => {
                             text_mode.push_str("decrypt");
-                            decrypt_morse_code(app.encrypted_string.clone())
-                        }
-                    };
-
-                    match app.mode.selected_mode {
-                        SelectedMode::Encrypt => {
-                            app.encrypted_string = output_text.clone();
-                        }
-                        SelectedMode::Decrypt => {
-                            app.plaintext = output_text.clone();
                         }
                     }
                     textarea.set_block(input_text_area_block);

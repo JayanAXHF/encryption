@@ -21,3 +21,4 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 directories = "5.0.1"
 lazy_static = "1.5.0"
 cli-log = "2.1.0"
+cli-clipboard = "0.4.0"

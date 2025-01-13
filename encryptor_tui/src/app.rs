@@ -1,3 +1,6 @@
+use cli_clipboard::ClipboardContext;
+use cli_clipboard::ClipboardProvider;
+use cli_log::debug;
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -271,6 +274,7 @@ impl App<'_> {
     /// If your application needs to perform work in between handling events, you can use the
     /// [`event::poll`] function to check if there are any events available with a timeout.
     fn handle_crossterm_events(&mut self) -> Result<()> {
+        let mut ctx = ClipboardContext::new().unwrap();
         match self.current_screen {
             CurrentScreen::InputtingValues => match crossterm::event::read()?.into() {
                 Input { key: Key::Esc, .. } => self.quit(),
@@ -295,7 +299,7 @@ impl App<'_> {
                         self.keyword = keyword_text;
                         self.column_key = column_key;
                         if self.read_from_file {
-                            input_text = fs::read_to_string(input_text).expect("Error reading file")
+                            input_text = fs::read_to_string(input_text.trim()).expect("Error reading file")
                         }
                         match self.mode.selected_mode {
                             SelectedMode::Encrypt => {
@@ -335,6 +339,64 @@ impl App<'_> {
                             self.column_key_text_area.input(input);
                         }
                     },
+                },
+            },
+            CurrentScreen::SeeingResult => match crossterm::event::read()?.into() {
+                Input { key: Key::Esc, .. } => self.quit(),
+                input => match input {
+                    Input { key: Key::Tab, .. } => {
+                        if let EncryptionMethods::MorseCode = self.encryption {
+                        } else {
+                            let index = self
+                                .inputs
+                                .clone()
+                                .into_iter()
+                                .position(|r| r == self.currently_editing)
+                                .expect("Error finding index");
+                            let next_element = if index < self.inputs.len() - 1 {
+                                self.inputs[index + 1].clone()
+                            } else {
+                                self.inputs[0].clone()
+                            };
+                            self.currently_editing = next_element;
+                            debug!("changed currently editing");
+                        }
+                    }
+                    Input {
+                        key: Key::Char('c') | Key::Char('C'),
+                        ctrl: true,
+                        ..
+                    } => match self.currently_editing {
+                        Inputs::Keyword => {
+                            debug!("keyword");
+                            self.keyword_text_area.select_all();
+                            self.keyword_text_area.input(input);
+                            ctx.set_contents(self.keyword_text_area.lines().join(" "))
+                                .unwrap()
+                        }
+                        Inputs::InputText => {
+                            debug!("input");
+                            self.input_text_area.select_all();
+                            self.input_text_area.copy();
+                            self.input_text_area.input(input);
+                            match self.mode.selected_mode {
+                               SelectedMode::Encrypt => {
+                                    ctx.set_contents(self.encrypted_string.clone()).unwrap();
+                                }
+                                SelectedMode::Decrypt => {
+                                    ctx.set_contents(self.plaintext.clone()).unwrap();
+                                }
+                            }
+                        }
+                        Inputs::ColumnKey => {
+                            debug!("c_key");
+                            ctx.set_contents(self.column_key_text_area.lines().join(" "))
+                                .unwrap();
+                            self.column_key_text_area.select_all();
+                            self.column_key_text_area.input(input);
+                        }
+                    },
+                    _ => {}
                 },
             },
             _ => {
