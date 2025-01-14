@@ -52,7 +52,7 @@ pub fn generate_cipher(plaintext: String, keyword_string: String) -> String {
     formatted_string
 }
 
-pub fn decrypt(mut encrypted_string: String, keyword: String) -> String {
+pub fn decrypt(mut encrypted_string: String, keyword: String, ask_for_ai: bool) -> String {
     let alphabet: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
     let numbers: Vec<char> = "0123456789".chars().collect();
     let letters: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
@@ -95,7 +95,7 @@ pub fn decrypt(mut encrypted_string: String, keyword: String) -> String {
         let decrypted_letter = alphabet[(((index_encrypted + 36) - index_key) % 36) as usize];
         decrypted_string.push(decrypted_letter);
     }
-    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}", env::var("GEMINI_API_KEY_RUST").unwrap());
+    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}", env::var("GEMINI_API_KEY_RUST").unwrap_or_default());
     let client = reqwest::blocking::Client::new();
     let payload = json!({
         "contents": [
@@ -108,10 +108,12 @@ pub fn decrypt(mut encrypted_string: String, keyword: String) -> String {
     });
 
     let mut ai_process = String::new();
-    println!("Use AI to reformat the string? [requires you to set the environment variable GEMINI_API_KEY_RUST to a valid api key] [y/N]");
-    io::stdin()
-        .read_line(&mut ai_process)
-        .expect("Error reading line");
+    if ask_for_ai {
+        println!("Use AI to reformat the string? [requires you to set the environment variable GEMINI_API_KEY_RUST to a valid api key] [y/N]");
+        io::stdin()
+            .read_line(&mut ai_process)
+            .expect("Error reading line");
+    }
     if ai_process.trim() == "y" {
         let res = client.post(&url).json(&payload).send();
         let str_res = res

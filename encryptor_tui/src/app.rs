@@ -239,7 +239,11 @@ impl App<'_> {
         }
     }
     /// Run the application's main loop.
-    pub fn run<B: Backend>(mut self, mut terminal: &mut Terminal<B>) -> Result<()> {
+    pub fn run<B: Backend>(
+        mut self,
+        mut terminal: &mut Terminal<B>,
+        events: &[Event],
+    ) -> Result<()> {
         self.running = true;
         while self.running {
             terminal.draw(|frame| ui(frame, &mut self).expect("REASON"))?;
@@ -285,6 +289,7 @@ impl App<'_> {
                 } => {
                     if let CurrentScreen::InputtingValues = self.current_screen {
                         let keyword_text = self.keyword_text_area.clone().into_lines().join(" ");
+                        debug!("Keyword: {:?}", keyword_text.clone());
                         let column_key: Vec<u8> = self
                             .column_key_text_area
                             .clone()
@@ -299,8 +304,10 @@ impl App<'_> {
                         self.keyword = keyword_text;
                         self.column_key = column_key;
                         if self.read_from_file {
-                            input_text = fs::read_to_string(input_text.trim()).expect("Error reading file")
+                            input_text =
+                                fs::read_to_string(input_text.trim()).expect("Error reading file")
                         }
+                        debug!("{}", input_text.clone());
                         match self.mode.selected_mode {
                             SelectedMode::Encrypt => {
                                 self.plaintext = input_text;
@@ -380,7 +387,7 @@ impl App<'_> {
                             self.input_text_area.copy();
                             self.input_text_area.input(input);
                             match self.mode.selected_mode {
-                               SelectedMode::Encrypt => {
+                                SelectedMode::Encrypt => {
                                     ctx.set_contents(self.encrypted_string.clone()).unwrap();
                                 }
                                 SelectedMode::Decrypt => {
@@ -393,6 +400,20 @@ impl App<'_> {
                             ctx.set_contents(self.column_key_text_area.lines().join(" "))
                                 .unwrap();
                             self.column_key_text_area.select_all();
+                            self.column_key_text_area.input(input);
+                        }
+                    },
+                    Input {
+                        key: Key::Up | Key::Down | Key::Right | Key::Left,
+                        ..
+                    } => match self.currently_editing {
+                        Inputs::Keyword => {
+                            self.keyword_text_area.input(input);
+                        }
+                        Inputs::InputText => {
+                            self.input_text_area.input(input);
+                        }
+                        Inputs::ColumnKey => {
                             self.column_key_text_area.input(input);
                         }
                     },

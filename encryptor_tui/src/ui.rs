@@ -149,6 +149,9 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                     text_mode.push_str("Decrypted Text");
                 }
             }
+            if app.read_from_file {
+                text_mode = String::from("Enter Filename")
+            }
             let mut input_text_area_block = Block::bordered().title(text_mode);
             let mut column_key_text_area_block =
                 Block::bordered().title("Column Key[num. 1-6 separted by whitespace]");
@@ -250,9 +253,12 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                     text_mode.push_str("Decrypted Text");
                 }
             }
+            if app.read_from_file {
+                text_mode = String::from("Enter Filename")
+            }
             let mut input_text_area_block = Block::bordered().title(text_mode);
             let mut column_key_text_area_block =
-                Block::bordered().title("Column Key[num. 1-6 separted by whitespace]");
+                Block::bordered().title("Column Key[num. 1-6 separated by whitespace]");
             match app.currently_editing {
                 crate::app::Inputs::Keyword => {
                     keyword_text_area_block = keyword_text_area_block.border_style(Color::Green);
@@ -265,27 +271,18 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                         column_key_text_area_block.border_style(Color::Green);
                 }
             }
-            /*if app.read_from_file {
-                match app.mode.selected_mode {
-                    SelectedMode::Encrypt => {
-                        app.plaintext = fs::read_to_string(app.plaintext.trim())?;
-                        debug!("{}", &app.plaintext)
-                    }
-                    SelectedMode::Decrypt => {
-                        app.encrypted_string = fs::read_to_string(app.encrypted_string.trim())?
-                    }
-                }
-            }*/
             app.plaintext = remove_punctuation(&remove_whitespace(&mut app.plaintext.clone()));
             app.encrypted_string =
                 remove_punctuation(&remove_whitespace(&mut app.encrypted_string.clone()));
             match app.encryption {
                 EncryptionMethods::VigenereCipher => {
                     debug!(
-                        "data: {:#?} ---- {:#?} --- {:#?}",
+                        "data: {:#?} ---- {:#?} --- {:#?} --- {:#?} --- {:?}",
                         app.keyword.clone(),
                         app.plaintext.clone(),
-                        app.encrypted_string.clone()
+                        app.encrypted_string.clone(),
+                        generate_keyword_string(&mut app.keyword, app.encrypted_string.len()).len(),
+                        app.encrypted_string.len()
                     );
 
                     let output_text = match app.mode.selected_mode {
@@ -293,10 +290,9 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                             app.plaintext.clone(),
                             generate_keyword_string(&mut app.keyword.clone(), app.plaintext.len()),
                         ),
-                        SelectedMode::Decrypt => decrypt(
-                            app.encrypted_string.clone(),
-                            generate_keyword_string(&mut app.keyword.clone(), app.encrypted_string.len()),
-                        ),
+                        SelectedMode::Decrypt => {
+                            decrypt(app.encrypted_string.clone(), app.keyword.clone(), false)
+                        }
                     };
                     match app.mode.selected_mode {
                         SelectedMode::Encrypt => {
@@ -314,7 +310,14 @@ pub fn ui(frame: &mut Frame, app: &mut App) -> Result<()> {
                     let mut textarea = TextArea::new(vec![app.keyword.clone()]);
                     textarea.set_block(keyword_text_area_block);
 
-                    let mut input_text_area = TextArea::new(vec![output_text.trim().to_owned()]);
+                    let mut input_text_area = TextArea::new(
+                        output_text
+                            .chars()
+                            .collect::<Vec<char>>()
+                            .chunks(100)
+                            .map(|chunk| chunk.iter().collect())
+                            .collect(),
+                    );
                     input_text_area.set_block(input_text_area_block);
                     //textarea.input(app.keyword_input.clone());
                     frame.render_widget(&textarea, split_layout[0]);
